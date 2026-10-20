@@ -120,8 +120,8 @@ end
 -- The theme is read once when the windows are built (PLAYER_LOGIN), so
 -- switching it asks for a /reload, same as the other reload-only settings.
 --
---   classic: the stock Blizzard look -- tooltip panel (dark blue fill, silver
---            border) for the tracker, the marbled dialog box with the gold
+--   classic: the stock Blizzard look -- tooltip-style panel (Bagshui's neutral
+--            dark fill and light border) for the tracker, the marbled dialog box with the gold
 --            header plate for settings, gold titles, drop-shadow text instead
 --            of outlines, silver rules that fade out at the ends, quest-log
 --            hover glow on rows, and stock checkboxes / buttons / close button.
@@ -145,8 +145,10 @@ local THEMES = {
         classic     = true,
         inset       = 4,
         padBottom   = 4,
-        bg          = { 0.09, 0.09, 0.19 },    -- TOOLTIP_DEFAULT_BACKGROUND_COLOR
-        border      = { 1, 1, 1 },             -- TOOLTIP_DEFAULT_COLOR
+        -- same neutral window colors as Bagshui's defaults (windowBackground /
+        -- windowBorder), so the tracker matches it instead of the navy tooltip tint
+        bg          = { 0.090, 0.085, 0.090 },
+        border      = { 0.900, 0.850, 0.900 },
         titleHex    = "|cffffd100",            -- NORMAL_FONT_COLOR
         headerColor = { 1, 0.82, 0 },
         sectionColor= { 1, 0.82, 0 },
@@ -775,7 +777,7 @@ end
 -------------------------------------------------------------------------------
 
 -- Background fill follows the transparency slider; in the classic theme the
--- silver border fades with it a little (never fully), like OctoBus does.
+-- border fades with it a little (never fully), like OctoBus does.
 function m.applyFrameAlpha(f)
     f = f or m.frame
     if not f then return end
@@ -783,7 +785,7 @@ function m.applyFrameAlpha(f)
     local a = cfg("frameAlpha")
     f:SetBackdropColor(T.bg[1], T.bg[2], T.bg[3], a)
     if T.classic then
-        f:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], math.min(1, a + 0.25))
+        f:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], math.min(0.98, a + 0.25))
     else
         f:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
     end
