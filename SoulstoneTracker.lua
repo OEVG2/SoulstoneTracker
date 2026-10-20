@@ -1409,6 +1409,8 @@ function m.createFrame()
                 SendAddonMessage(ADDON_MSG_PREFIX, "SYNCREQ", channel)
             end
         end
+        -- the last-minute title pulse is only worth animating when visible
+        if not f:IsVisible() then return end
         local shouldFlash = false
         local now = time()
         for _, data in pairs(m.stones) do
@@ -1441,6 +1443,10 @@ function m.createFrame()
         end
     end)
 
+    -- Redraw as soon as the window becomes visible again, so it never shows
+    -- stale times after being closed (m.refresh skips work while hidden).
+    f:SetScript("OnShow", function() m.refresh() end)
+
     -- Restore position
     if SoulstoneTrackerDB.position then
         local p = SoulstoneTrackerDB.position
@@ -1469,6 +1475,10 @@ end
 
 function m.refresh()
     if not m.frame then return end
+    -- Purely visual: skip while the window is closed (or the UI is hidden
+    -- with Alt+Z). The window's OnShow redraws it the moment it reappears,
+    -- and warnings / expiry keep running from the ticker regardless.
+    if not m.frame:IsVisible() then return end
     local f = m.frame
 
     local list = {}
@@ -1552,6 +1562,10 @@ end
 
 function m.refreshBanish()
     if not m.frame then return end
+    -- same as m.refresh: nothing to draw while hidden. (Joining or leaving a
+    -- group still shows/hides the window: the roster events call
+    -- updateGroupVisibility directly.)
+    if not m.frame:IsVisible() then return end
     local f = m.frame
     m.applyFrameAlpha(f)
     m.updateGroupVisibility()
