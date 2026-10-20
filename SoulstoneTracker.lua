@@ -1522,6 +1522,24 @@ function m.updateGroupVisibility()
     end
 end
 
+-- Placeholders shown when a warlock has no curse / no banish mark
+local EMPTY_CURSE_ICON  = "Interface\\Icons\\Spell_Shadow_DeathCoil"
+local EMPTY_BANISH_ICON = "Interface\\Icons\\Spell_Shadow_Cripple"
+
+-- Grey an icon out (desaturated where the client supports it, dimmed either
+-- way), or restore it to full color.
+local function setGreyed(tex, grey)
+    if grey then
+        if tex.SetDesaturated then tex:SetDesaturated(1) end
+        tex:SetVertexColor(0.6, 0.6, 0.6)
+        tex:SetAlpha(0.55)
+    else
+        if tex.SetDesaturated then tex:SetDesaturated(nil) end
+        tex:SetVertexColor(1, 1, 1)
+        tex:SetAlpha(1)
+    end
+end
+
 function m.refreshBanish()
     if not m.frame then return end
     local f = m.frame
@@ -1656,6 +1674,7 @@ function m.refreshBanish()
                         row.curseIcon:SetPoint("TopLeft", f, "TopLeft", curseColX, curY - 2)
                         row.curseIcon:SetTexture(CURSE_ICONS[shortName] or "Interface\\Icons\\Spell_Shadow_Curse")
                         row.curseIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                        setGreyed(row.curseIcon, false)
                         row.curseIcon:Show()
                         row.curseLbl:ClearAllPoints()
                         row.curseLbl:SetPoint("TopLeft", f, "TopLeft", curseColX + 18, curY - 2)
@@ -1663,12 +1682,15 @@ function m.refreshBanish()
                         row.curseLbl:SetText((CURSE_COLORS[shortName] or "|cffffffff")..shortName.."|r")
                         row.curseLbl:Show()
                     else
-                        row.curseIcon:Hide()
-                        row.curseLbl:ClearAllPoints()
-                        row.curseLbl:SetPoint("TopLeft", f, "TopLeft", curseColX, curY - 2)
-                        row.curseLbl:SetWidth(CURSE_COL_W)
-                        row.curseLbl:SetText("|cff666666-|r")
-                        row.curseLbl:Show()
+                        -- no curse: greyed-out Death Coil placeholder
+                        row.curseIcon:ClearAllPoints()
+                        row.curseIcon:SetPoint("TopLeft", f, "TopLeft", curseColX, curY - 2)
+                        row.curseIcon:SetTexture(EMPTY_CURSE_ICON)
+                        row.curseIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                        setGreyed(row.curseIcon, true)
+                        row.curseIcon:Show()
+                        row.curseLbl:SetText("")
+                        row.curseLbl:Hide()
                     end
 
                     -- Curse override hitbox (covers icon+label area, click to manually set)
@@ -1684,12 +1706,21 @@ function m.refreshBanish()
                     local iconIdx = m.banish[wName]
                     if iconIdx and RAID_ICONS[iconIdx] then
                         local c = RAID_ICONS[iconIdx].coords
+                        row.banishTex:ClearAllPoints()
+                        row.banishTex:SetAllPoints(row.banishBtn)
                         row.banishTex:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
                         row.banishTex:SetTexCoord(c[1], c[2], c[3], c[4])
+                        setGreyed(row.banishTex, false)
                         row.banishLbl:SetText("")
                     else
-                        row.banishTex:SetTexCoord(0,0,0,0)
-                        row.banishLbl:SetText("|cffaaaaaa-|r")
+                        -- no mark: small greyed-out Banish placeholder
+                        row.banishTex:ClearAllPoints()
+                        row.banishTex:SetWidth(14) row.banishTex:SetHeight(14)
+                        row.banishTex:SetPoint("Center", row.banishBtn, "Center", 0, 0)
+                        row.banishTex:SetTexture(EMPTY_BANISH_ICON)
+                        row.banishTex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                        setGreyed(row.banishTex, true)
+                        row.banishLbl:SetText("")
                     end
 
                     curY = curY - SEC_ROW_H
