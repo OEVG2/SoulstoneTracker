@@ -7,8 +7,6 @@ REQUIRES NAMPOWER https://github.com/Emyrk/nampower
 
 Tracks Soulstones caster and target, will sync/update if others have the addon installed
 
-please let me know if you run into any issues!
-
 ---------------------------------------------------------------------------------------------------------------------------
 
 **Fork changes**
