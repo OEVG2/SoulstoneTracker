@@ -1,5 +1,5 @@
 
-Made for Octowow
+Made for 1.18.1 clients
 
 REQUIRES NAMPOWER https://github.com/Emyrk/nampower
 
@@ -11,7 +11,7 @@ please let me know if you run into any issues!
 
 ---------------------------------------------------------------------------------------------------------------------------
 
-Fork changes
+**Fork changes**
 
 Still syncs with the original SoulstoneTracker: the addon messages are unchanged.
 
@@ -35,7 +35,7 @@ Fixes
   clearing expired stones, the soulstone cooldown check and the 5-minute resync used to stop until the window was
   reopened (closing it with the X, the minimap button, /ss or "hide when not in party/raid" all caused it)
 - the window isn't redrawn while it's closed, and redraws straight away when reopened
-
+---------------------------------------------------------------------------------------------------------------------------
 1.5
 
 - added transparency slider
