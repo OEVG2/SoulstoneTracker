@@ -84,6 +84,7 @@ local DEFAULTS = {
     showBanishSection = true,
     frameAlpha        = 0.95,
     hideWhenSolo      = false,
+    classicTheme      = true,  -- Blizzard look; false = the original purple "Shadow" look
     -- Timing
     warnMinutes       = 5,   -- first warning threshold in minutes
     warnSeconds       = 60,  -- second warning threshold in seconds
@@ -111,6 +112,107 @@ local function setCfg(key, val)
     if SoulstoneTrackerDB then
         SoulstoneTrackerDB.cfg = m.cfg
     end
+end
+
+-------------------------------------------------------------------------------
+-- Themes
+-------------------------------------------------------------------------------
+-- The theme is read once when the windows are built (PLAYER_LOGIN), so
+-- switching it asks for a /reload, same as the other reload-only settings.
+--
+--   classic: the stock Blizzard look -- tooltip panel (dark blue fill, silver
+--            border) for the tracker, the marbled dialog box with the gold
+--            header plate for settings, gold titles, drop-shadow text instead
+--            of outlines, silver rules that fade out at the ends, quest-log
+--            hover glow on rows, and stock checkboxes / buttons / close button.
+--   shadow:  the original flat dark window with the purple title bar.
+
+local THEMES = {
+    shadow = {
+        classic     = false,
+        inset       = 1,                       -- gap between edge and content
+        padBottom   = 0,
+        bg          = { 0.05, 0.05, 0.08 },
+        border      = { 0.25, 0.25, 0.35 },
+        titleHex    = "|cffffd700",
+        headerColor = { 0.85, 0.85, 0.85 },
+        sectionColor= { 0.6, 0.6, 0.6 },
+        emptyColor  = { 0.4, 0.4, 0.4 },
+        rule        = { 0.3, 0.15, 0.5, 0.8 },
+        stripe      = 0.04,
+    },
+    classic = {
+        classic     = true,
+        inset       = 4,
+        padBottom   = 4,
+        bg          = { 0.09, 0.09, 0.19 },    -- TOOLTIP_DEFAULT_BACKGROUND_COLOR
+        border      = { 1, 1, 1 },             -- TOOLTIP_DEFAULT_COLOR
+        titleHex    = "|cffffd100",            -- NORMAL_FONT_COLOR
+        headerColor = { 1, 0.82, 0 },
+        sectionColor= { 1, 0.82, 0 },
+        emptyColor  = { 0.5, 0.5, 0.5 },
+        rule        = { 0.8, 0.8, 0.8, 0.6 },
+        stripe      = 0.03,
+    },
+}
+
+local function theme()
+    if cfg("classicTheme") then return THEMES.classic end
+    return THEMES.shadow
+end
+
+-- Set a font in the active theme's style: classic text has the stock 1px
+-- drop shadow and no outline, the shadow theme keeps its thin outline.
+local function styleFont(fs, size, T)
+    T = T or theme()
+    if T.classic then
+        fs:SetFont(FONT, size, "")
+        fs:SetShadowColor(0, 0, 0, 1)
+        fs:SetShadowOffset(1, -1)
+    else
+        fs:SetFont(FONT, size, "OUTLINE")
+    end
+end
+
+-- A 1px horizontal rule as a frame (so callers can ClearAllPoints / SetPoint
+-- / Show / Hide it like the plain texture it replaces). Classic: a silver
+-- line that fades out toward both ends. Shadow: a solid purple line.
+local function makeRule(parent, T)
+    T = T or theme()
+    local r = CreateFrame("Frame", nil, parent)
+    r:SetHeight(1)
+    local c = T.rule
+    if T.classic then
+        local L = r:CreateTexture(nil, "ARTWORK")
+        local R = r:CreateTexture(nil, "ARTWORK")
+        L:SetTexture("Interface\\Buttons\\WHITE8X8")
+        R:SetTexture("Interface\\Buttons\\WHITE8X8")
+        L:SetPoint("TopLeft", r, "TopLeft", 0, 0)
+        L:SetPoint("BottomRight", r, "Bottom", 0, 0)
+        R:SetPoint("TopLeft", r, "Top", 0, 0)
+        R:SetPoint("BottomRight", r, "BottomRight", 0, 0)
+        L:SetGradientAlpha("HORIZONTAL", c[1], c[2], c[3], 0, c[1], c[2], c[3], c[4])
+        R:SetGradientAlpha("HORIZONTAL", c[1], c[2], c[3], c[4], c[1], c[2], c[3], 0)
+    else
+        local t = r:CreateTexture(nil, "ARTWORK")
+        t:SetAllPoints(r)
+        t:SetTexture(c[1], c[2], c[3], c[4])
+    end
+    return r
+end
+
+-- Same as makeRule but the line only fades out to the right: used beside a
+-- section label ("Label ———") so it never runs through the text.
+local function makeTrailingRule(parent, T)
+    T = T or theme()
+    local r = CreateFrame("Frame", nil, parent)
+    r:SetHeight(1)
+    local c = T.rule
+    local t = r:CreateTexture(nil, "ARTWORK")
+    t:SetAllPoints(r)
+    t:SetTexture("Interface\\Buttons\\WHITE8X8")
+    t:SetGradientAlpha("HORIZONTAL", c[1], c[2], c[3], c[4], c[1], c[2], c[3], 0)
+    return r
 end
 
 -------------------------------------------------------------------------------
@@ -652,6 +754,21 @@ end
 -- Column repositioning on resize
 -------------------------------------------------------------------------------
 
+-- Background fill follows the transparency slider; in the classic theme the
+-- silver border fades with it a little (never fully), like OctoBus does.
+function m.applyFrameAlpha(f)
+    f = f or m.frame
+    if not f then return end
+    local T = f.theme or theme()
+    local a = cfg("frameAlpha")
+    f:SetBackdropColor(T.bg[1], T.bg[2], T.bg[3], a)
+    if T.classic then
+        f:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], math.min(1, a + 0.25))
+    else
+        f:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
+    end
+end
+
 function m.repositionColumns()
     local f = m.frame
     if not f or not f.cols then return end
@@ -659,7 +776,7 @@ function m.repositionColumns()
 
     local tx = math.floor(w * COL_ARROW) + 14
     f.cols.hTarget:ClearAllPoints()
-    f.cols.hTarget:SetPoint("TopLeft", f, "TopLeft", tx, -(TITLE_H + HEADER_H/2))
+    f.cols.hTarget:SetPoint("TopLeft", f, "TopLeft", tx, f.headerY or -(TITLE_H + HEADER_H/2))
 
     for i = 1, MAX_ROWS do
         local row = f.rows[i]
@@ -720,18 +837,31 @@ function m.createFrame()
     local savedW = SoulstoneTrackerDB.size and SoulstoneTrackerDB.size.w or BASE_W
     local savedH = SoulstoneTrackerDB.size and SoulstoneTrackerDB.size.h or TITLE_H + HEADER_H + ROW_H + 6
 
+    local T = theme()
+    local IN = T.inset
+
     local f = CreateFrame("Frame", "SoulstoneTrackerFrame", UIParent)
     f:SetWidth(savedW)
     f:SetHeight(savedH)
     f:SetFrameStrata("MEDIUM")
-    f:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
-        insets   = { left=1, right=1, top=1, bottom=1 }
-    })
-    f:SetBackdropColor(0.05, 0.05, 0.08, cfg("frameAlpha"))
-    f:SetBackdropBorderColor(0.25, 0.25, 0.35, 1)
+    if T.classic then
+        -- classic Blizzard tooltip panel: dark blue fill, silver rounded border
+        f:SetBackdrop({
+            bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 16,
+            insets   = { left=4, right=4, top=4, bottom=4 }
+        })
+    else
+        f:SetBackdrop({
+            bgFile   = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 1,
+            insets   = { left=1, right=1, top=1, bottom=1 }
+        })
+    end
+    f.theme = T
+    m.applyFrameAlpha(f)
     f:EnableMouse(true)
     f:SetMovable(true)
     f:SetResizable(true)
@@ -754,23 +884,43 @@ function m.createFrame()
 
     -- Title bar
     local titleBar = CreateFrame("Frame", nil, f)
-    titleBar:SetPoint("TopLeft",  f, "TopLeft",  1, -1)
-    titleBar:SetPoint("TopRight", f, "TopRight", -1, -1)
-    titleBar:SetHeight(TITLE_H)
-    titleBar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-    titleBar:SetBackdropColor(0.22, 0.08, 0.38, 1)
     f.titleBar = titleBar
+    if T.classic then
+        -- no filled bar: gold title straight on the panel, silver rule below
+        titleBar:SetPoint("TopLeft",  f, "TopLeft",  IN, -IN)
+        titleBar:SetPoint("TopRight", f, "TopRight", -IN, -IN)
+        titleBar:SetHeight(TITLE_H - IN)
 
-    local grad = titleBar:CreateTexture(nil, "OVERLAY")
-    grad:SetAllPoints(titleBar)
-    grad:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-    grad:SetBlendMode("ADD")
-    grad:SetVertexColor(0.2, 0.05, 0.4, 0.4)
+        -- red glow behind the title that pulses while a stone is in its
+        -- final minute (the shadow theme flashes its title bar instead)
+        local glow = titleBar:CreateTexture(nil, "BACKGROUND")
+        glow:SetAllPoints(titleBar)
+        glow:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+        glow:SetBlendMode("ADD")
+        glow:SetVertexColor(1, 0.15, 0.1, 0)
+        f.titleGlow = glow
+
+        local titleRule = makeRule(f, T)
+        titleRule:SetPoint("TopLeft",  f, "TopLeft",  IN + 4, -TITLE_H)
+        titleRule:SetPoint("TopRight", f, "TopRight", -(IN + 4), -TITLE_H)
+    else
+        titleBar:SetPoint("TopLeft",  f, "TopLeft",  1, -1)
+        titleBar:SetPoint("TopRight", f, "TopRight", -1, -1)
+        titleBar:SetHeight(TITLE_H)
+        titleBar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
+        titleBar:SetBackdropColor(0.22, 0.08, 0.38, 1)
+
+        local grad = titleBar:CreateTexture(nil, "OVERLAY")
+        grad:SetAllPoints(titleBar)
+        grad:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+        grad:SetBlendMode("ADD")
+        grad:SetVertexColor(0.2, 0.05, 0.4, 0.4)
+    end
 
     local title = titleBar:CreateFontString(nil, "OVERLAY")
-    title:SetFont(FONT, 11, "OUTLINE")
-    title:SetPoint("Left", titleBar, "Left", 6, 0)
-    title:SetText("|cffffd700Soulstone Tracker v1.5|r")
+    styleFont(title, T.classic and 12 or 11, T)
+    title:SetPoint("Left", titleBar, "Left", T.classic and 4 or 6, 0)
+    title:SetText(T.titleHex.."Soulstone Tracker v1.5|r")
     f.title = title
 
     -- Settings button (defined in XML with BLP texture)
@@ -778,6 +928,21 @@ function m.createFrame()
     settingsBtn:SetParent(titleBar)
     settingsBtn:SetPoint("Right", titleBar, "Right", -42, 0)
     settingsBtn:Show()
+    if T.classic then
+        -- gold cog that lights up white on hover, like the title text
+        local cog = settingsBtn:GetNormalTexture()
+        if cog then cog:SetVertexColor(1, 0.82, 0) end
+        local onEnter = settingsBtn:GetScript("OnEnter")
+        local onLeave = settingsBtn:GetScript("OnLeave")
+        settingsBtn:SetScript("OnEnter", function()
+            if cog then cog:SetVertexColor(1, 1, 1) end
+            if onEnter then onEnter() end
+        end)
+        settingsBtn:SetScript("OnLeave", function()
+            if cog then cog:SetVertexColor(1, 0.82, 0) end
+            if onLeave then onLeave() end
+        end)
+    end
 
     -- Scan button (pure Lua, not XML -- avoids the reload/staleness issues
     -- we hit with the XML-defined buttons).
@@ -788,11 +953,12 @@ function m.createFrame()
     -- theme since it's just colored text, same approach (and now the exact
     -- same colors) as the settings panel's own text-based close button.
     local scanTxt = scanBtn:CreateFontString(nil, "OVERLAY")
-    scanTxt:SetFont(FONT, 13, "OUTLINE")
+    styleFont(scanTxt, 13, T)
     scanTxt:SetAllPoints(scanBtn)
     scanTxt:SetJustifyH("Center")
     scanTxt:SetJustifyV("Middle")
-    scanTxt:SetText("|cffaaaaaaS|r")
+    local scanIdle = T.classic and "|cffffd100S|r" or "|cffaaaaaaS|r"
+    scanTxt:SetText(scanIdle)
     scanBtn:SetScript("OnEnter", function()
         GameTooltip:SetOwner(scanBtn, "ANCHOR_LEFT")
         GameTooltip:SetText("Force resync with group")
@@ -801,7 +967,7 @@ function m.createFrame()
     end)
     scanBtn:SetScript("OnLeave", function()
         GameTooltip:Hide()
-        scanTxt:SetText("|cffaaaaaaS|r")
+        scanTxt:SetText(scanIdle)
     end)
     scanBtn:SetScript("OnClick", function()
         local channel = GetNumRaidMembers() > 0 and "RAID" or (GetNumPartyMembers() > 0 and "PARTY" or nil)
@@ -835,41 +1001,54 @@ function m.createFrame()
 
     -- X close button (defined in XML with BLP texture)
     local closeBtn = _G["SSTCloseButton"]
-    closeBtn:SetParent(titleBar)
-    closeBtn:SetPoint("Right", titleBar, "Right", -4, 0)
-    closeBtn:Show()
+    if T.classic then
+        -- the stock red Blizzard close button instead of the flat X
+        closeBtn:Hide()
+        closeBtn = CreateFrame("Button", "SSTClassicCloseButton", titleBar, "UIPanelCloseButton")
+        closeBtn:SetWidth(24) closeBtn:SetHeight(24)
+        closeBtn:SetPoint("Right", titleBar, "Right", 4, 0)
+        closeBtn:SetFrameLevel(titleBar:GetFrameLevel() + 3)
+        closeBtn:SetScript("OnClick", function() m.onClose() end)
+        closeBtn:Show()
+    else
+        closeBtn:SetParent(titleBar)
+        closeBtn:SetPoint("Right", titleBar, "Right", -4, 0)
+        closeBtn:Show()
+    end
 
     -- Column headers
-    local hY = -(TITLE_H + HEADER_H/2)
+    -- classic: headers sit a bit higher so they clear the rule under them
+    local hY = T.classic and -(TITLE_H + 3) or -(TITLE_H + HEADER_H/2)
+    f.headerY = hY
 
+    local hc = T.headerColor
     local hCaster = f:CreateFontString(nil, "OVERLAY")
-    hCaster:SetFont(FONT, 10, "OUTLINE")
-    hCaster:SetTextColor(0.85, 0.85, 0.85, 1)
+    styleFont(hCaster, 10, T)
+    hCaster:SetTextColor(hc[1], hc[2], hc[3], 1)
     hCaster:SetPoint("TopLeft", f, "TopLeft", 8, hY)
     hCaster:SetText("Caster")
 
     local hTarget = f:CreateFontString(nil, "OVERLAY")
-    hTarget:SetFont(FONT, 10, "OUTLINE")
-    hTarget:SetTextColor(0.85, 0.85, 0.85, 1)
+    styleFont(hTarget, 10, T)
+    hTarget:SetTextColor(hc[1], hc[2], hc[3], 1)
     hTarget:SetPoint("TopLeft", f, "TopLeft", math.floor(savedW * COL_ARROW) + 14, hY)
     hTarget:SetText("Target")
 
     local hExpires = f:CreateFontString(nil, "OVERLAY")
-    hExpires:SetFont(FONT, 10, "OUTLINE")
-    hExpires:SetTextColor(0.85, 0.85, 0.85, 1)
+    styleFont(hExpires, 10, T)
+    hExpires:SetTextColor(hc[1], hc[2], hc[3], 1)
     hExpires:SetPoint("TopRight", f, "TopRight", -8, hY)
     hExpires:SetJustifyH("Right")
     hExpires:SetText("Expires")
 
-    local div = f:CreateTexture(nil, "ARTWORK")
-    div:SetHeight(1)
-    div:SetPoint("TopLeft",  f, "TopLeft",  1, -(TITLE_H + HEADER_H))
-    div:SetPoint("TopRight", f, "TopRight", -1, -(TITLE_H + HEADER_H))
-    div:SetTexture(0.3, 0.15, 0.5, 0.8)
+    local div = makeRule(f, T)
+    local divIn = T.classic and IN + 4 or 1
+    div:SetPoint("TopLeft",  f, "TopLeft",  divIn, -(TITLE_H + HEADER_H))
+    div:SetPoint("TopRight", f, "TopRight", -divIn, -(TITLE_H + HEADER_H))
 
     local empty = f:CreateFontString(nil, "OVERLAY")
-    empty:SetFont(FONT, 10, "OUTLINE")
-    empty:SetTextColor(0.4, 0.4, 0.4, 1)
+    styleFont(empty, 10, T)
+    empty:SetTextColor(T.emptyColor[1], T.emptyColor[2], T.emptyColor[3], 1)
     empty:SetPoint("TopLeft", f, "TopLeft", 8, -(TITLE_H + HEADER_H + 3))
     empty:SetText("No active soulstones")
     f.empty = empty
@@ -883,46 +1062,61 @@ function m.createFrame()
         local w = savedW
 
         local bg = f:CreateTexture(nil, "BACKGROUND")
-        bg:SetPoint("TopLeft",  f, "TopLeft",  1, rowY)
-        bg:SetPoint("TopRight", f, "TopRight", -1, rowY)
+        bg:SetPoint("TopLeft",  f, "TopLeft",  IN, rowY)
+        bg:SetPoint("TopRight", f, "TopRight", -IN, rowY)
         bg:SetHeight(ROW_H)
-        if math.mod(i, 2) == 0 then bg:SetTexture(1,1,1,0.04) else bg:SetTexture(0,0,0,0) end
+        if math.mod(i, 2) == 0 then bg:SetTexture(1,1,1,T.stripe) else bg:SetTexture(0,0,0,0) end
         bg:Hide()
 
         local caster = f:CreateFontString(nil, "OVERLAY")
-        caster:SetFont(FONT, 11, "OUTLINE")
+        styleFont(caster, 11, T)
         caster:SetPoint("TopLeft", f, "TopLeft", 8, rowY)
         caster:SetWidth(math.floor(w * COL_CASTER_END) - 8)
         caster:SetJustifyH("Left")
 
         local arrow = f:CreateFontString(nil, "OVERLAY")
-        arrow:SetFont(FONT, 11, "OUTLINE")
+        styleFont(arrow, 11, T)
         arrow:SetTextColor(0.4, 0.4, 0.4, 1)
         arrow:SetPoint("TopLeft", f, "TopLeft", math.floor(w * COL_ARROW), rowY)
         arrow:SetText("->")
 
         local tx = math.floor(w * COL_ARROW) + 14
         local target = f:CreateFontString(nil, "OVERLAY")
-        target:SetFont(FONT, 11, "OUTLINE")
+        styleFont(target, 11, T)
         target:SetPoint("TopLeft", f, "TopLeft", tx, rowY)
         target:SetWidth(math.floor(w * COL_TARGET_END) - tx - 4)
         target:SetJustifyH("Left")
 
         local timer = f:CreateFontString(nil, "OVERLAY")
-        timer:SetFont(FONT, 11, "OUTLINE")
+        styleFont(timer, 11, T)
         timer:SetPoint("TopRight", f, "TopRight", -8, rowY)
         timer:SetWidth(w - math.floor(w * COL_TARGET_END) - 8)
         timer:SetJustifyH("Right")
 
         local hitbox = CreateFrame("Frame", nil, f)
         hitbox:SetHeight(ROW_H)
-        hitbox:SetPoint("TopLeft",  f, "TopLeft",  1, rowY)
-        hitbox:SetPoint("TopRight", f, "TopRight", -1, rowY)
+        hitbox:SetPoint("TopLeft",  f, "TopLeft",  IN, rowY)
+        hitbox:SetPoint("TopRight", f, "TopRight", -IN, rowY)
         hitbox:EnableMouse(true)
         hitbox.rowIndex = i
+
+        -- classic quest-log style hover glow on rows that have a stone
+        -- (drawn on the window itself, under the row text, not on the hitbox
+        -- which sits above the text)
+        if T.classic then
+            local hl = f:CreateTexture(nil, "BORDER")
+            hl:SetAllPoints(hitbox)
+            hl:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+            hl:SetBlendMode("ADD")
+            hl:SetAlpha(0.5)
+            hl:Hide()
+            hitbox.hl = hl
+        end
+
         hitbox:SetScript("OnEnter", function()
             local row = f.rows[this.rowIndex]
             if not row or not row.data then return end
+            if this.hl then this.hl:Show() end
             local d = row.data
             GameTooltip:SetOwner(this, "ANCHOR_CURSOR")
             GameTooltip:SetText("|cffa050ff"..d.caster.."|r -> |cffffffff"..d.target.."|r")
@@ -932,7 +1126,10 @@ function m.createFrame()
             GameTooltip:AddLine(string.format("Time left: %dm %02ds", math.floor(s/60), math.mod(s,60)), 1,1,0)
             GameTooltip:Show()
         end)
-        hitbox:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        hitbox:SetScript("OnLeave", function()
+            if this.hl then this.hl:Hide() end
+            GameTooltip:Hide()
+        end)
 
         f.rows[i] = { caster=caster, arrow=arrow, target=target, timer=timer, bg=bg, hitbox=hitbox, data=nil }
     end
@@ -940,15 +1137,15 @@ function m.createFrame()
     local SEC_ROW_H = 18
 
     -- Combined Warlock section (curse + banish on same row)
-    local warlockDivTex = f:CreateTexture(nil, "ARTWORK")
-    warlockDivTex:SetHeight(1)
-    warlockDivTex:SetTexture(0.3, 0.15, 0.5, 0.8)
+    -- classic: "Curse and Banish Assignment ———" with the rule trailing the
+    -- label; shadow: the original small caps label on a full-width line
+    local warlockDivTex = T.classic and makeTrailingRule(f, T) or makeRule(f, T)
     f.curseDivider = warlockDivTex
 
     local warlockHdr = f:CreateFontString(nil, "OVERLAY")
-    warlockHdr:SetFont(FONT, 8, "OUTLINE")
-    warlockHdr:SetTextColor(0.6, 0.6, 0.6, 1)
-    warlockHdr:SetText("CURSE AND BANISH ASSIGNMENT")
+    styleFont(warlockHdr, T.classic and 10 or 8, T)
+    warlockHdr:SetTextColor(T.sectionColor[1], T.sectionColor[2], T.sectionColor[3], 1)
+    warlockHdr:SetText(T.classic and "Curse and Banish Assignment" or "CURSE AND BANISH ASSIGNMENT")
     f.curseHeader = warlockHdr
 
     -- Footer line for curses found via target-scan whose caster is unknown
@@ -956,7 +1153,7 @@ function m.createFrame()
     -- per-warlock row display since there's no known warlock to attach them
     -- to, so they get a small summary line instead.
     local unknownCurseLine = f:CreateFontString(nil, "OVERLAY")
-    unknownCurseLine:SetFont(FONT, 9, "OUTLINE")
+    styleFont(unknownCurseLine, 9, T)
     unknownCurseLine:SetTextColor(0.7, 0.7, 0.7, 1)
     unknownCurseLine:Hide()
     f.unknownCurseLine = unknownCurseLine
@@ -966,12 +1163,12 @@ function m.createFrame()
     for i = 1, 5 do
         local bg = f:CreateTexture(nil, "BACKGROUND")
         bg:SetHeight(SEC_ROW_H)
-        if math.mod(i,2)==0 then bg:SetTexture(1,1,1,0.04) else bg:SetTexture(0,0,0,0) end
+        if math.mod(i,2)==0 then bg:SetTexture(1,1,1,T.stripe) else bg:SetTexture(0,0,0,0) end
         bg:Hide()
 
         -- Warlock name
         local nameTxt = f:CreateFontString(nil, "OVERLAY")
-        nameTxt:SetFont(FONT, 11, "OUTLINE")
+        styleFont(nameTxt, 11, T)
         nameTxt:SetJustifyH("Left")
         nameTxt:Hide()
 
@@ -983,7 +1180,7 @@ function m.createFrame()
 
         -- Curse label
         local curseLbl = f:CreateFontString(nil, "OVERLAY")
-        curseLbl:SetFont(FONT, 10, "OUTLINE")
+        styleFont(curseLbl, 10, T)
         curseLbl:SetJustifyH("Left")
         curseLbl:Hide()
 
@@ -1066,7 +1263,7 @@ function m.createFrame()
         banishBtn.iconTex = banishTex
 
         local banishLbl = banishBtn:CreateFontString(nil, "OVERLAY")
-        banishLbl:SetFont(FONT, 10, "OUTLINE")
+        styleFont(banishLbl, 10, T)
         banishLbl:SetAllPoints(banishBtn)
         banishLbl:SetJustifyH("Center")
         banishLbl:SetJustifyV("Middle")
@@ -1134,7 +1331,11 @@ function m.createFrame()
     local grip = CreateFrame("Button", nil, f)
     grip:SetWidth(16)
     grip:SetHeight(16)
-    grip:SetPoint("BottomRight", f, "BottomRight", 0, 0)
+    if T.classic then
+        grip:SetPoint("BottomRight", f, "BottomRight", -2, 2)
+    else
+        grip:SetPoint("BottomRight", f, "BottomRight", 0, 0)
+    end
     grip:SetFrameLevel(f:GetFrameLevel() + 10)
     grip:SetNormalTexture("Interface\\AddOns\\SoulstoneTracker\\ResizeGrip")
     grip:SetScript("OnEnter", function()
@@ -1189,14 +1390,22 @@ function m.createFrame()
             flashTime = flashTime + arg1 * flashDir
             if flashTime >= 1 then flashDir = -1
             elseif flashTime <= 0 then flashDir = 1 end
-            local r = 0.22 + (0.5 * flashTime)
-            local g = 0.08 * (1 - flashTime)
-            local b = 0.38 * (1 - flashTime)
-            f.titleBar:SetBackdropColor(r, g, b, 1)
+            if f.titleGlow then
+                f.titleGlow:SetVertexColor(1, 0.15, 0.1, 0.8 * flashTime)
+            else
+                local r = 0.22 + (0.5 * flashTime)
+                local g = 0.08 * (1 - flashTime)
+                local b = 0.38 * (1 - flashTime)
+                f.titleBar:SetBackdropColor(r, g, b, 1)
+            end
         else
             flashTime = 0
             flashDir = 1
-            f.titleBar:SetBackdropColor(0.22, 0.08, 0.38, 1)
+            if f.titleGlow then
+                f.titleGlow:SetVertexColor(1, 0.15, 0.1, 0)
+            else
+                f.titleBar:SetBackdropColor(0.22, 0.08, 0.38, 1)
+            end
         end
     end)
 
@@ -1239,9 +1448,9 @@ function m.refresh()
 
     local missing = getWarlocksMissingStones()
     if table.getn(missing) > 0 and (GetNumRaidMembers() > 0 or GetNumPartyMembers() > 0) then
-        f.title:SetText("|cffffd700Soulstone Tracker|r |cffff7c0a["..table.getn(missing).." available]|r")
+        f.title:SetText((f.theme or theme()).titleHex.."Soulstone Tracker|r |cffff7c0a["..table.getn(missing).." available]|r")
     else
-        f.title:SetText("|cffffd700Soulstone Tracker v1.5|r")
+        f.title:SetText((f.theme or theme()).titleHex.."Soulstone Tracker v1.5|r")
     end
 
     if count == 0 then f.empty:Show() else f.empty:Hide() end
@@ -1266,6 +1475,7 @@ function m.refresh()
             row.target:SetText("")
             row.timer:SetText("")
             row.bg:Hide()
+            if row.hitbox.hl then row.hitbox.hl:Hide() end
             row.data = nil
         end
     end
@@ -1293,7 +1503,7 @@ end
 function m.refreshBanish()
     if not m.frame then return end
     local f = m.frame
-    f:SetBackdropColor(0.05, 0.05, 0.08, cfg("frameAlpha"))
+    m.applyFrameAlpha(f)
     m.updateGroupVisibility()
     local SEC_ROW_H = 18
     local HEADER_H2 = 10
@@ -1337,24 +1547,40 @@ function m.refreshBanish()
     local curY = baseY
 
     local warlockCount = table.getn(warlocks)
+    local T = f.theme or theme()
+    local IN = T.inset
 
     if not f.warlockRows then
         -- Frame height only
-        f:SetHeight(TITLE_H + HEADER_H + stoneRows * ROW_H + 6)
+        f:SetHeight(TITLE_H + HEADER_H + stoneRows * ROW_H + 6 + T.padBottom)
         return
     end
 
     if warlockCount > 0 and cfg("showCurseSection") then
         -- Divider
-        f.curseDivider:ClearAllPoints()
-        f.curseDivider:SetPoint("TopLeft",  f, "TopLeft",  1, curY)
-        f.curseDivider:SetPoint("TopRight", f, "TopRight", -1, curY)
-        f.curseDivider:Show()
-        -- Header inline on divider
-        f.curseHeader:ClearAllPoints()
-        f.curseHeader:SetPoint("TopLeft", f, "TopLeft", 8, curY + 5)
-        f.curseHeader:Show()
-        curY = curY - 2
+        if T.classic then
+            -- gold label, then a silver rule trailing off to the right of it
+            curY = curY - 4
+            f.curseHeader:ClearAllPoints()
+            f.curseHeader:SetPoint("TopLeft", f, "TopLeft", 8, curY)
+            f.curseHeader:Show()
+            local ruleX = 8 + math.ceil(f.curseHeader:GetStringWidth() or 150) + 6
+            f.curseDivider:ClearAllPoints()
+            f.curseDivider:SetPoint("TopLeft",  f, "TopLeft",  ruleX, curY - 6)
+            f.curseDivider:SetPoint("TopRight", f, "TopRight", -(IN + 4), curY - 6)
+            f.curseDivider:Show()
+            curY = curY - 14
+        else
+            f.curseDivider:ClearAllPoints()
+            f.curseDivider:SetPoint("TopLeft",  f, "TopLeft",  1, curY)
+            f.curseDivider:SetPoint("TopRight", f, "TopRight", -1, curY)
+            f.curseDivider:Show()
+            -- Header inline on divider
+            f.curseHeader:ClearAllPoints()
+            f.curseHeader:SetPoint("TopLeft", f, "TopLeft", 8, curY + 5)
+            f.curseHeader:Show()
+            curY = curY - 2
+        end
 
         for i = 1, 5 do
             local row = f.warlockRows[i]
@@ -1364,8 +1590,8 @@ function m.refreshBanish()
                 if wName then
                     -- Bg
                     row.bg:ClearAllPoints()
-                    row.bg:SetPoint("TopLeft",  f, "TopLeft",  1, curY)
-                    row.bg:SetPoint("TopRight", f, "TopRight", -1, curY)
+                    row.bg:SetPoint("TopLeft",  f, "TopLeft",  IN, curY)
+                    row.bg:SetPoint("TopRight", f, "TopRight", -IN, curY)
                     row.bg:SetHeight(SEC_ROW_H)
                     row.bg:Show()
 
@@ -1484,7 +1710,7 @@ function m.refreshBanish()
     end
 
     -- Resize
-    local totalH = TITLE_H + HEADER_H + (stoneRows * ROW_H) + 6 + math.abs(curY - baseY)
+    local totalH = TITLE_H + HEADER_H + (stoneRows * ROW_H) + 6 + math.abs(curY - baseY) + T.padBottom
     f:SetHeight(totalH)
 end
 
@@ -1636,19 +1862,32 @@ function m.toggleSettings()
 end
 
 function m.createSettings()
+    local T = theme()
+    -- SW is the content width; the classic dialog border adds PADX each side
+    local PADX = T.classic and 12 or 0
     local SW, SH = 320, 420
     local s = CreateFrame("Frame", "SoulstoneTrackerSettings", UIParent)
-    s:SetWidth(SW)
+    s:SetWidth(SW + 2 * PADX)
     s:SetHeight(SH)
     s:SetFrameStrata("HIGH")
-    s:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
-        insets   = { left=1, right=1, top=1, bottom=1 }
-    })
-    s:SetBackdropColor(0.05, 0.05, 0.08, 0.98)
-    s:SetBackdropBorderColor(0.4, 0.2, 0.6, 1)
+    if T.classic then
+        -- the stock Blizzard dialog box: marbled dark background, gold-trimmed border
+        s:SetBackdrop({
+            bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true, tileSize = 32, edgeSize = 32,
+            insets   = { left=11, right=12, top=12, bottom=11 }
+        })
+    else
+        s:SetBackdrop({
+            bgFile   = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 1,
+            insets   = { left=1, right=1, top=1, bottom=1 }
+        })
+        s:SetBackdropColor(0.05, 0.05, 0.08, 0.98)
+        s:SetBackdropBorderColor(0.4, 0.2, 0.6, 1)
+    end
     s:SetMovable(true)
     s:EnableMouse(true)
     s:RegisterForDrag("LeftButton")
@@ -1663,41 +1902,94 @@ function m.createSettings()
         s:SetPoint("Center", UIParent, "Center", 0, 0)
     end
 
-    -- Title bar
-    local titleBar = CreateFrame("Frame", nil, s)
-    titleBar:SetPoint("TopLeft",  s, "TopLeft",  1, -1)
-    titleBar:SetPoint("TopRight", s, "TopRight", -1, -1)
-    titleBar:SetHeight(22)
-    titleBar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-    titleBar:SetBackdropColor(0.22, 0.08, 0.38, 1)
+    if T.classic then
+        -- gold title plate across the top edge, like the stock option windows
+        local header = s:CreateTexture(nil, "ARTWORK")
+        header:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
+        header:SetWidth(300)
+        header:SetHeight(64)
+        header:SetPoint("Top", s, "Top", 0, 12)
 
-    local grad = titleBar:CreateTexture(nil, "OVERLAY")
-    grad:SetAllPoints(titleBar)
-    grad:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-    grad:SetBlendMode("ADD")
-    grad:SetVertexColor(0.2, 0.05, 0.4, 0.4)
+        local title = s:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        title:SetPoint("Top", header, "Top", 0, -14)
+        title:SetText("Soulstone Tracker Settings")
 
-    local title = titleBar:CreateFontString(nil, "OVERLAY")
-    title:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
-    title:SetPoint("Left", titleBar, "Left", 6, 0)
-    title:SetText("|cffffd700Soulstone Tracker — Settings|r")
+        local closeBtn = CreateFrame("Button", nil, s, "UIPanelCloseButton")
+        closeBtn:SetPoint("TopRight", s, "TopRight", -5, -5)
+        closeBtn:SetFrameLevel(s:GetFrameLevel() + 5)
+        closeBtn:SetScript("OnClick", function() m.closeSettings() end)
+    else
+        -- Title bar
+        local titleBar = CreateFrame("Frame", nil, s)
+        titleBar:SetPoint("TopLeft",  s, "TopLeft",  1, -1)
+        titleBar:SetPoint("TopRight", s, "TopRight", -1, -1)
+        titleBar:SetHeight(22)
+        titleBar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
+        titleBar:SetBackdropColor(0.22, 0.08, 0.38, 1)
 
-    local closeBtn = CreateFrame("Button", nil, titleBar)
-    closeBtn:SetWidth(18) closeBtn:SetHeight(18)
-    closeBtn:SetPoint("Right", titleBar, "Right", -4, 0)
-    local closeTxt = closeBtn:CreateFontString(nil, "OVERLAY")
-    closeTxt:SetFont("Fonts\\FRIZQT__.TTF", 13, "OUTLINE")
-    closeTxt:SetAllPoints(closeBtn) closeTxt:SetJustifyH("Center") closeTxt:SetJustifyV("Middle")
-    closeTxt:SetText("|cffaaaaaaX|r")
-    closeBtn:SetScript("OnEnter", function() closeTxt:SetText("|cffffffffX|r") end)
-    closeBtn:SetScript("OnLeave", function() closeTxt:SetText("|cffaaaaaaX|r") end)
-    closeBtn:SetScript("OnClick", function() m.closeSettings() end)
+        local grad = titleBar:CreateTexture(nil, "OVERLAY")
+        grad:SetAllPoints(titleBar)
+        grad:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+        grad:SetBlendMode("ADD")
+        grad:SetVertexColor(0.2, 0.05, 0.4, 0.4)
+
+        local title = titleBar:CreateFontString(nil, "OVERLAY")
+        title:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+        title:SetPoint("Left", titleBar, "Left", 6, 0)
+        title:SetText("|cffffd700Soulstone Tracker — Settings|r")
+
+        local closeBtn = CreateFrame("Button", nil, titleBar)
+        closeBtn:SetWidth(18) closeBtn:SetHeight(18)
+        closeBtn:SetPoint("Right", titleBar, "Right", -4, 0)
+        local closeTxt = closeBtn:CreateFontString(nil, "OVERLAY")
+        closeTxt:SetFont("Fonts\\FRIZQT__.TTF", 13, "OUTLINE")
+        closeTxt:SetAllPoints(closeBtn) closeTxt:SetJustifyH("Center") closeTxt:SetJustifyV("Middle")
+        closeTxt:SetText("|cffaaaaaaX|r")
+        closeBtn:SetScript("OnEnter", function() closeTxt:SetText("|cffffffffX|r") end)
+        closeBtn:SetScript("OnLeave", function() closeTxt:SetText("|cffaaaaaaX|r") end)
+        closeBtn:SetScript("OnClick", function() m.closeSettings() end)
+    end
+
+    -- left / right content edges inside the border
+    local LX = 10 + PADX
+    local RX = -(10 + PADX)
+
+    -- shared click handling for both checkbox styles
+    local function onToggle(key, newVal)
+        setCfg(key, newVal)
+        -- the theme is applied when the windows are built
+        if key == "classicTheme" then
+            s.needsReload = true
+            say("Theme changes apply after a UI reload.")
+        end
+        if m.frame then m.refreshBanish() end
+    end
 
     -- Helper to create a toggle checkbox row
     local function makeToggle(parent, label, key, yOff)
+        if T.classic then
+            -- stock gold-trimmed options checkbox with a white label
+            local name = "SSTrackerCheck_"..key
+            local cb = CreateFrame("CheckButton", name, parent, "OptionsCheckButtonTemplate")
+            cb:SetWidth(22) cb:SetHeight(22)
+            cb:SetPoint("TopLeft", parent, "TopLeft", LX - 4, yOff + 4)
+            cb:SetHitRectInsets(0, -180, 0, 0)
+            local text = getglobal(name.."Text")
+            text:SetText(label)
+            text:SetTextColor(1, 1, 1)
+            cb.key = key
+            cb:SetScript("OnClick", function()
+                local on = this:GetChecked() and true or false
+                if on then PlaySound("igMainMenuOptionCheckBoxOn") else PlaySound("igMainMenuOptionCheckBoxOff") end
+                onToggle(this.key, on)
+            end)
+            cb:SetChecked(cfg(key))
+            return cb
+        end
+
         local cb = CreateFrame("Button", nil, parent)
         cb:SetWidth(14) cb:SetHeight(14)
-        cb:SetPoint("TopLeft", parent, "TopLeft", 10, yOff)
+        cb:SetPoint("TopLeft", parent, "TopLeft", LX, yOff)
 
         local box = cb:CreateTexture(nil, "ARTWORK")
         box:SetAllPoints(cb)
@@ -1719,9 +2011,8 @@ function m.createSettings()
         cb.key   = key
         cb:SetScript("OnClick", function()
             local cur = cfg(this.key)
-            setCfg(this.key, not cur)
             if not cur then this.check:Show() else this.check:Hide() end
-            if m.frame then m.refreshBanish() end
+            onToggle(this.key, not cur)
         end)
         cb:SetScript("OnEnter", function() box:SetVertexColor(0.25, 0.15, 0.35, 1) end)
         cb:SetScript("OnLeave", function() box:SetVertexColor(0.15, 0.15, 0.2, 1) end)
@@ -1731,6 +2022,18 @@ function m.createSettings()
 
     -- Helper for section header
     local function makeHeader(parent, text, yOff)
+        if T.classic then
+            -- gold label with a silver rule trailing off to its right
+            local hdr = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            hdr:SetPoint("TopLeft", parent, "TopLeft", LX - 2, yOff + 6)
+            hdr:SetText(text)
+            local rule = makeTrailingRule(parent, T)
+            local rx = LX - 2 + math.ceil(hdr:GetStringWidth() or 100) + 6
+            rule:SetPoint("TopLeft",  parent, "TopLeft",  rx, yOff)
+            rule:SetPoint("TopRight", parent, "TopRight", RX, yOff)
+            return hdr
+        end
+
         local div = parent:CreateTexture(nil, "ARTWORK")
         div:SetHeight(1)
         div:SetPoint("TopLeft",  parent, "TopLeft",  6, yOff)
@@ -1741,29 +2044,39 @@ function m.createSettings()
         hdr:SetFont("Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
         hdr:SetTextColor(0.7, 0.5, 1, 1)
         hdr:SetPoint("TopLeft", parent, "TopLeft", 10, yOff + 5)
-        hdr:SetText(text)
+        hdr:SetText(string.upper(text))
         return hdr
+    end
+
+    -- label + value line above a slider, styled per theme
+    local function sliderLabels(parent, label, yOff)
+        local lbl = parent:CreateFontString(nil, "OVERLAY")
+        local valLbl = parent:CreateFontString(nil, "OVERLAY")
+        if T.classic then
+            lbl:SetFontObject(GameFontHighlightSmall)
+            valLbl:SetFontObject(GameFontNormalSmall)
+        else
+            lbl:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+            lbl:SetTextColor(0.85, 0.85, 0.85, 1)
+            valLbl:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+            valLbl:SetTextColor(0.6, 0.3, 1, 1)
+        end
+        lbl:SetPoint("TopLeft", parent, "TopLeft", LX, yOff)
+        lbl:SetText(label)
+        valLbl:SetPoint("TopRight", parent, "TopRight", RX, yOff)
+        valLbl:SetJustifyH("Right")
+        return lbl, valLbl
     end
 
     -- Helper for number input
     local function makeSlider(parent, label, key, minV, maxV, step, yOff)
-        local lbl = parent:CreateFontString(nil, "OVERLAY")
-        lbl:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
-        lbl:SetTextColor(0.85, 0.85, 0.85, 1)
-        lbl:SetPoint("TopLeft", parent, "TopLeft", 10, yOff)
-        lbl:SetText(label)
-
-        local valLbl = parent:CreateFontString(nil, "OVERLAY")
-        valLbl:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
-        valLbl:SetTextColor(0.6, 0.3, 1, 1)
-        valLbl:SetPoint("TopRight", parent, "TopRight", -10, yOff)
-        valLbl:SetJustifyH("Right")
+        local lbl, valLbl = sliderLabels(parent, label, yOff)
 
         local sliderName = "SSTracker_Slider_"..key
         local slider = CreateFrame("Slider", sliderName, parent, "OptionsSliderTemplate")
         slider:SetWidth(SW - 30)
         slider:SetHeight(16)
-        slider:SetPoint("TopLeft", parent, "TopLeft", 10, yOff - 14)
+        slider:SetPoint("TopLeft", parent, "TopLeft", LX, yOff - 14)
         slider:SetMinMaxValues(minV, maxV)
         slider:SetValueStep(step)
         slider:SetValue(cfg(key))
@@ -1771,7 +2084,7 @@ function m.createSettings()
         getglobal(sliderName.."High"):SetText(tostring(maxV))
         local sliderText = getglobal(sliderName.."Text")
         sliderText:SetText(tostring(cfg(key)))
-        sliderText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+        if T.classic then sliderText:Hide() else sliderText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE") end
         slider.key = key
         slider.valLbl = valLbl
         slider:SetScript("OnValueChanged", function()
@@ -1788,23 +2101,13 @@ function m.createSettings()
     -- percentage (more intuitive) while storing/reading the underlying
     -- 0-1 float config value, and applies live rather than requiring reopen.
     local function makeAlphaSlider(parent, label, yOff)
-        local lbl = parent:CreateFontString(nil, "OVERLAY")
-        lbl:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
-        lbl:SetTextColor(0.85, 0.85, 0.85, 1)
-        lbl:SetPoint("TopLeft", parent, "TopLeft", 10, yOff)
-        lbl:SetText(label)
-
-        local valLbl = parent:CreateFontString(nil, "OVERLAY")
-        valLbl:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
-        valLbl:SetTextColor(0.6, 0.3, 1, 1)
-        valLbl:SetPoint("TopRight", parent, "TopRight", -10, yOff)
-        valLbl:SetJustifyH("Right")
+        local lbl, valLbl = sliderLabels(parent, label, yOff)
 
         local sliderName = "SSTracker_Slider_frameAlpha"
         local slider = CreateFrame("Slider", sliderName, parent, "OptionsSliderTemplate")
         slider:SetWidth(SW - 30)
         slider:SetHeight(16)
-        slider:SetPoint("TopLeft", parent, "TopLeft", 10, yOff - 14)
+        slider:SetPoint("TopLeft", parent, "TopLeft", LX, yOff - 14)
         slider:SetMinMaxValues(10, 100)
         slider:SetValueStep(5)
         local startPct = math.floor(cfg("frameAlpha") * 100 + 0.5)
@@ -1813,7 +2116,7 @@ function m.createSettings()
         getglobal(sliderName.."High"):SetText("100%")
         local sliderText = getglobal(sliderName.."Text")
         sliderText:SetText(startPct.."%")
-        sliderText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+        if T.classic then sliderText:Hide() else sliderText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE") end
         slider.valLbl = valLbl
         slider:SetScript("OnValueChanged", function()
             local pct = math.floor(this:GetValue() / 5 + 0.5) * 5
@@ -1827,10 +2130,22 @@ function m.createSettings()
     end
 
     -- Helper for action button
+    local btnCount = 0
     local function makeButton(parent, label, onClick, yOff)
+        if T.classic then
+            -- stock red-and-gold panel button
+            btnCount = btnCount + 1
+            local btn = CreateFrame("Button", "SSTrackerSettingsButton"..btnCount, parent, "UIPanelButtonTemplate")
+            btn:SetWidth(SW - 20) btn:SetHeight(22)
+            btn:SetPoint("TopLeft", parent, "TopLeft", LX, yOff)
+            btn:SetText(label)
+            btn:SetScript("OnClick", onClick)
+            return btn
+        end
+
         local btn = CreateFrame("Button", nil, parent)
         btn:SetWidth(SW - 20) btn:SetHeight(20)
-        btn:SetPoint("TopLeft", parent, "TopLeft", 10, yOff)
+        btn:SetPoint("TopLeft", parent, "TopLeft", LX, yOff)
         btn:SetBackdrop({ bgFile="Interface\\Buttons\\WHITE8X8", edgeFile="Interface\\Buttons\\WHITE8X8", edgeSize=1, insets={left=1,right=1,top=1,bottom=1} })
         btn:SetBackdropColor(0.15, 0.08, 0.25, 1)
         btn:SetBackdropBorderColor(0.4, 0.2, 0.6, 0.8)
@@ -1848,10 +2163,13 @@ function m.createSettings()
     -- Store checkboxes for refresh
     s.checks = {}
     s.needsReload = false
-    local y = -28
+    -- classic: start below the gold header plate, and give each section
+    -- header a little air above and below
+    local y = T.classic and -34 or -28
+    local HGAP = T.classic and 6 or 0
 
     -- NOTIFICATIONS section
-    makeHeader(s, "NOTIFICATIONS", y) y = y - 14
+    y = y - HGAP makeHeader(s, "Notifications", y) y = y - 14 - HGAP
     s.checks["warnOnCast"]    = makeToggle(s, "Play sound on soulstone cast",       "warnOnCast",    y) y = y - 18
     s.checks["warnFiveMin"]   = makeToggle(s, "Warn when soulstone nears expiry",    "warnFiveMin",   y) y = y - 18
     s.checks["warnOneMin"]    = makeToggle(s, "Warn at final countdown",             "warnOneMin",    y) y = y - 18
@@ -1860,11 +2178,11 @@ function m.createSettings()
     s.checks["warnWarlocks"]  = makeToggle(s, "List warlocks with available SS",     "warnWarlocks",  y) y = y - 24
 
     -- SOUNDS section
-    makeHeader(s, "SOUNDS", y) y = y - 14
+    y = y - HGAP makeHeader(s, "Sounds", y) y = y - 14 - HGAP
     s.checks["muteSounds"]    = makeToggle(s, "Mute all sounds",                     "muteSounds",    y) y = y - 24
 
     -- RAID CHAT section
-    makeHeader(s, "RAID CHAT ANNOUNCEMENTS", y) y = y - 14
+    y = y - HGAP makeHeader(s, "Raid Chat Announcements", y) y = y - 14 - HGAP
     s.checks["muteChat"]         = makeToggle(s, "Mute all raid chat",               "muteChat",         y) y = y - 18
     s.checks["announceOnCast"]   = makeToggle(s, "Announce soulstone casts",         "announceOnCast",   y) y = y - 18
     s.checks["announceWarnings"] = makeToggle(s, "Announce expiry warnings",         "announceWarnings", y) y = y - 18
@@ -1873,18 +2191,19 @@ function m.createSettings()
     s.checks["announceBanish"]   = makeToggle(s, "Announce banish assignments",      "announceBanish",   y) y = y - 24
 
     -- DISPLAY section
-    makeHeader(s, "DISPLAY", y) y = y - 14
+    y = y - HGAP makeHeader(s, "Display", y) y = y - 14 - HGAP
     s.checks["showCurseSection"]  = makeToggle(s, "Show curse & banish section",     "showCurseSection",  y) y = y - 24
     s.checks["hideWhenSolo"]      = makeToggle(s, "Hide when not in party/raid",     "hideWhenSolo",       y) y = y - 24
+    s.checks["classicTheme"]      = makeToggle(s, "Classic WoW look (needs reload)", "classicTheme",       y) y = y - 24
     s.alphaSlider = makeAlphaSlider(s, "Background transparency:", y) y = y - 46
 
     -- TIMING section
-    makeHeader(s, "WARNING THRESHOLDS", y) y = y - 14
-    s.warnMinSlider = makeSlider(s, "First warning (minutes):", "warnMinutes", 1, 15, 1, y) y = y - 36
+    y = y - HGAP makeHeader(s, "Warning Thresholds", y) y = y - 14 - HGAP
+    s.warnMinSlider = makeSlider(s, "First warning (minutes):", "warnMinutes", 1, 15, 1, y) y = y - (T.classic and 44 or 36)
     s.warnSecSlider = makeSlider(s, "Final warning (seconds):", "warnSeconds", 15, 120, 5, y) y = y - 40
 
     -- ACTION BUTTONS
-    makeHeader(s, "ACTIONS", y) y = y - 14
+    y = y - HGAP makeHeader(s, "Actions", y) y = y - 14 - HGAP
     makeButton(s, "Clear all soulstones", function()
         m.stones = {} m.refresh() say("Cleared all soulstones.")
     end, y) y = y - 26
@@ -1917,7 +2236,7 @@ function m.createSettings()
         say("Position reset. Reload to apply.")
     end, y)
 
-    s:SetHeight(math.abs(y) + 30)
+    s:SetHeight(math.abs(y) + 30 + (T.classic and 6 or 0))
     s:Hide()
     m.settings = s
 end
@@ -1928,6 +2247,8 @@ function m.refreshSettings()
     for key, cb in pairs(s.checks) do
         if cb.check then
             if cfg(key) then cb.check:Show() else cb.check:Hide() end
+        elseif cb.SetChecked then
+            cb:SetChecked(cfg(key))
         end
     end
     if s.warnMinSlider then
@@ -2562,6 +2883,19 @@ SlashCmdList["SOULSTONETRACKER"] = function(args)
             say("Usage: /ss scale 0.5-2.0  (e.g. /ss scale 0.8)")
         end
 
+    elseif string.find(cmd, "^theme") then
+        local _, _, which = string.find(cmd, "^theme%s*(%a*)")
+        if which == "classic" or which == "shadow" then
+            setCfg("classicTheme", which == "classic")
+            if m.settings and m.settings.checks and m.settings.checks["classicTheme"] then
+                m.refreshSettings()
+            end
+            say("Theme set to "..which..". /reload to apply.")
+        else
+            say("Theme: "..(cfg("classicTheme") and "classic" or "shadow")..
+                ".  Usage: /ss theme classic, or /ss theme shadow")
+        end
+
     elseif cmd == "help" then
         say("|cffffd700Commands:|r")
         say("|cffffd700/ss|r — toggle window")
@@ -2575,6 +2909,7 @@ SlashCmdList["SOULSTONETRACKER"] = function(args)
         say("|cffffd700/ss clearcurses|r — clear curse assignments")
         say("|cffffd700/ss lock|r — toggle frame lock")
         say("|cffffd700/ss scale 0.8|r — resize (0.5-2.0)")
+        say("|cffffd700/ss theme classic|r or |cffffd700shadow|r — Blizzard look or the original purple look (needs /reload)")
         say("|cffffd700/ss scan|r — scan group for existing stones")
         say("|cffffd700/ss scancurse|r — scan your target for curses (unknown caster)")
         say("|cffffd700/ss resync|r — force resync of known data with group")

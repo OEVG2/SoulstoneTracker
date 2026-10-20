@@ -11,6 +11,13 @@ please let me know if you run into any issues!
 
 ---------------------------------------------------------------------------------------------------------------------------
 
+Classic WoW theme
+
+- new default look: Blizzard tooltip panel (dark blue, silver border), gold titles and headers,
+  drop-shadow text, silver fading dividers, quest-log hover glow, red title pulse in a stone's last minute
+- settings window uses the stock dialog box with the gold header plate, checkboxes, sliders and red buttons
+- switch back to the original purple look in Settings > Display, or with /ss theme shadow (/ss theme classic to return); needs /reload
+
 1.5
 
 - added transparency slider
