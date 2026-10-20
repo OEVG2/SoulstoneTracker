@@ -1370,12 +1370,22 @@ function m.createFrame()
     grip:SetScript("OnMouseUp", function() f:StopMovingOrSizing() end)
 
     -- Ticker
+    -- Runs on its own always-shown, parentless frame rather than on the
+    -- tracker window: WoW doesn't run OnUpdate on hidden frames, so with the
+    -- ticker on the window, closing it (X, minimap button, /ss, or "hide when
+    -- not in party/raid") stopped expiry warnings, expired alerts and
+    -- announcements, clearing expired stones, the soulstone cooldown check and
+    -- the periodic resync. No parent also keeps it running when the UI is
+    -- hidden with Alt+Z.
     local tick = 0
     local ssCdTick = 0
     local autoSyncTick = 0
     local flashTime = 0
     local flashDir = 1
-    f:SetScript("OnUpdate", function()
+    local ticker = m.ticker or CreateFrame("Frame", "SoulstoneTrackerTicker")
+    m.ticker = ticker
+    ticker:Show()
+    ticker:SetScript("OnUpdate", function()
         tick = tick + arg1
         if tick >= 1 then
             tick = 0
