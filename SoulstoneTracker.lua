@@ -1923,16 +1923,34 @@ function m.createSettings()
     end
 
     if T.classic then
-        -- gold title plate across the top edge, like the stock option windows
-        local header = s:CreateTexture(nil, "ARTWORK")
-        header:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
-        header:SetWidth(300)
-        header:SetHeight(64)
-        header:SetPoint("Top", s, "Top", 0, 12)
-
+        -- gold title plate across the top edge, like the stock option windows.
+        -- Built from three slices of the stock header art (left cap, middle,
+        -- right cap) so the middle stretches to fit the title without
+        -- squashing the end caps.
+        local HEADER_TEX = "Interface\\DialogFrame\\UI-DialogBox-Header"
         local title = s:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        title:SetPoint("Top", header, "Top", 0, -14)
         title:SetText("Soulstone Tracker Settings")
+
+        local mid = s:CreateTexture(nil, "ARTWORK")
+        mid:SetTexture(HEADER_TEX)
+        mid:SetTexCoord(0.31, 0.67, 0, 0.63)
+        mid:SetHeight(40)
+        mid:SetWidth(math.ceil(title:GetStringWidth() or 170) + 16)
+        mid:SetPoint("Top", s, "Top", 0, 12)
+
+        local capL = s:CreateTexture(nil, "ARTWORK")
+        capL:SetTexture(HEADER_TEX)
+        capL:SetTexCoord(0.21, 0.31, 0, 0.63)
+        capL:SetWidth(30) capL:SetHeight(40)
+        capL:SetPoint("Right", mid, "Left", 0, 0)
+
+        local capR = s:CreateTexture(nil, "ARTWORK")
+        capR:SetTexture(HEADER_TEX)
+        capR:SetTexCoord(0.67, 0.77, 0, 0.63)
+        capR:SetWidth(30) capR:SetHeight(40)
+        capR:SetPoint("Left", mid, "Right", 0, 0)
+
+        title:SetPoint("Top", mid, "Top", 0, -14)
 
         local closeBtn = CreateFrame("Button", nil, s, "UIPanelCloseButton")
         closeBtn:SetPoint("TopRight", s, "TopRight", -5, -5)
