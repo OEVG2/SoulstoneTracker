@@ -5,7 +5,8 @@ REQUIRES NAMPOWER https://github.com/Emyrk/nampower
 
 /ss help for commands
 
-Tracks Soulstones caster and target, will sync/update if others have the addon installed
+Tracks Soulstones caster and target. Curse / Banish Assignment.
+Will sync/update if others have the addon installed
 
 ---------------------------------------------------------------------------------------------------------------------------
 
