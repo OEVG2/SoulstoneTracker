@@ -47,3 +47,12 @@ V1.2 added settings page cleaned up icons
 V1.1 added curse/banish tracking
 
 V1.0
+
+---------------------------------------------------------------------------------------------------------------------------
+
+**Credits**
+
+- SoulstoneTracker by Waylock ([Wayoff333/SoulstoneTracker](https://github.com/Wayoff333/SoulstoneTracker)), the original addon this fork is based on
+- Classic WoW theme, minimap button, curse/banish placeholders and background tracking fix by [OEVG2](https://github.com/OEVG2)
+- [Nampower](https://github.com/Emyrk/nampower) by Emyrk, which the tracking relies on
+- Window colors taken from Bagshui by veechs
