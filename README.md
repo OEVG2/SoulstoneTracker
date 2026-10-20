@@ -11,12 +11,30 @@ please let me know if you run into any issues!
 
 ---------------------------------------------------------------------------------------------------------------------------
 
-Classic WoW theme
+Fork changes
 
+Still syncs with the original SoulstoneTracker: the addon messages are unchanged.
+
+Classic WoW theme
 - new default look: Blizzard tooltip-style panel in the same neutral dark colors as Bagshui, gold titles and headers,
-  drop-shadow text, silver fading dividers, quest-log hover glow, red title pulse in a stone's last minute
-- settings window uses the stock dialog box with the gold header plate, checkboxes, sliders and red buttons
+  drop-shadow text, silver fading dividers, quest-log hover glow on rows, red title pulse in a stone's last minute
+- stock red close button; gold settings cog and S (resync) button that light up on hover
+- settings window uses the stock dialog box with a gold header plate that fits the title, checkboxes, sliders and red buttons
 - switch back to the original purple look in Settings > Display, or with /ss theme shadow (/ss theme classic to return); needs /reload
+
+Curse and banish section
+- a warlock with no curse detected shows a greyed-out Death Coil icon
+- a warlock with no banish mark shows a small greyed-out Banish icon
+- both turn back to full color once a curse or mark is assigned; clicking them works as before
+
+Minimap button
+- same size and round gold border as other minimap buttons (was a small square)
+
+Fixes
+- tracking keeps running while the window is closed: expiry warnings, expired alerts and raid announcements,
+  clearing expired stones, the soulstone cooldown check and the 5-minute resync used to stop until the window was
+  reopened (closing it with the X, the minimap button, /ss or "hide when not in party/raid" all caused it)
+- the window isn't redrawn while it's closed, and redraws straight away when reopened
 
 1.5
 
@@ -26,25 +44,8 @@ Classic WoW theme
 - S icon does a sync now vs scan
 - added ability to hide when not in party/raid
 
-
-<img width="995" height="1027" alt="image" src="https://github.com/user-attachments/assets/2e13006e-e6b0-4ad4-87e2-b2180400cd27" />
-
 V1.2 added settings page cleaned up icons
-
-
-
-<img width="525" height="154" alt="image" src="https://github.com/user-attachments/assets/58bb5e21-b24e-474b-9bab-0aa0525883c5" />
 
 V1.1 added curse/banish tracking
 
-
-
-<img width="603" height="152" alt="image" src="https://github.com/user-attachments/assets/311ac3fd-79fe-46b3-8c6c-edfa8eb3c361" />
-
 V1.0
-
-
-
-
-<img width="330" height="171" alt="image" src="https://github.com/user-attachments/assets/8777ac5b-76c0-4520-981f-1908dbc69292" />
-
