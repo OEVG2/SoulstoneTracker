@@ -684,29 +684,46 @@ end
 function m.createMinimapButton()
     local radius = 80
     local btn = CreateFrame("Button", "SoulstoneTrackerMinimap", Minimap)
-    btn:SetWidth(20)
-    btn:SetHeight(20)
+    -- Standard minimap button layout (same as the stock tracking button and
+    -- other addons' buttons): 31x31 button, round gold tracking border over
+    -- it, round dark backing, and the icon trimmed to sit inside the ring.
+    btn:SetWidth(31)
+    btn:SetHeight(31)
     btn:SetFrameStrata("MEDIUM")
     btn:SetFrameLevel(8)
     btn:SetClampedToScreen(true)
 
-    -- Background circle
+    -- Round dark backing behind the icon
     local bg = btn:CreateTexture(nil, "BACKGROUND")
-    bg:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Background")
-    bg:SetAllPoints(btn)
+    bg:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+    bg:SetWidth(20)
+    bg:SetHeight(20)
+    bg:SetPoint("TopLeft", btn, "TopLeft", 7, -5)
 
-    -- Use a soulstone-themed icon that's guaranteed to exist
+    -- Soulstone icon, edges trimmed so its square corners hide under the ring
     local icon = btn:CreateTexture(nil, "ARTWORK")
     icon:SetTexture("Interface\\Icons\\Spell_Shadow_SoulGem")
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     icon:SetWidth(18)
     icon:SetHeight(18)
-    icon:SetPoint("Center", btn, "Center", 0, 0)
+    icon:SetPoint("TopLeft", btn, "TopLeft", 7, -6)
+    btn.icon = icon
+
+    -- Round gold border
+    local border = btn:CreateTexture(nil, "OVERLAY")
+    border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+    border:SetWidth(53)
+    border:SetHeight(53)
+    border:SetPoint("TopLeft", btn, "TopLeft", 0, 0)
 
     -- Highlight on hover
-    local highlight = btn:CreateTexture(nil, "HIGHLIGHT")
-    highlight:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
-    highlight:SetAllPoints(btn)
-    highlight:SetBlendMode("ADD")
+    btn:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+    local highlight = btn:GetHighlightTexture()
+    if highlight then highlight:SetBlendMode("ADD") end
+
+    -- Icon nudges down-right while pressed, like the stock buttons
+    btn:SetScript("OnMouseDown", function() icon:SetPoint("TopLeft", btn, "TopLeft", 8, -7) end)
+    btn:SetScript("OnMouseUp", function() icon:SetPoint("TopLeft", btn, "TopLeft", 7, -6) end)
 
     local angle = SoulstoneTrackerDB.minimapAngle or 195
     local function updatePos()
@@ -725,7 +742,10 @@ function m.createMinimapButton()
             updatePos()
         end)
     end)
-    btn:SetScript("OnDragStop", function() btn:SetScript("OnUpdate", nil) end)
+    btn:SetScript("OnDragStop", function()
+        btn:SetScript("OnUpdate", nil)
+        icon:SetPoint("TopLeft", btn, "TopLeft", 7, -6)
+    end)
     btn:SetScript("OnClick", function()
         if m.frame:IsVisible() then
             m.frame:Hide() SoulstoneTrackerDB.hidden = true
