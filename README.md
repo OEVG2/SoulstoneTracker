@@ -29,6 +29,11 @@ Curse and banish section
 Minimap button
 - same size and round gold border as other minimap buttons (was a small square)
 
+Non-warlock characters
+- the addon is off on characters that aren't warlocks: no window, no minimap button, nothing tracked or sent
+- /ss enable turns it on for that character (and /ss disable turns it back off); needs /reload
+- when turned on for a non-warlock, that character is no longer listed in the curse and banish section as if it were a warlock
+
 Fixes
 - tracking keeps running while the window is closed: expiry warnings, expired alerts and raid announcements,
   clearing expired stones, the soulstone cooldown check and the 5-minute resync used to stop until the window was

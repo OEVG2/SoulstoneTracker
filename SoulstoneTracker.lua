@@ -114,6 +114,17 @@ local function setCfg(key, val)
     end
 end
 
+-- English class token ("WARLOCK"), so it works on any client language
+local function playerIsWarlock()
+    local _, class = UnitClass("player")
+    return class == "WARLOCK"
+end
+
+-- Key for per-character settings stored in the account-wide saved variables
+local function charKey()
+    return (UnitName("player") or "?").."-"..(GetRealmName() or "?")
+end
+
 -------------------------------------------------------------------------------
 -- Themes
 -------------------------------------------------------------------------------
@@ -1577,7 +1588,7 @@ function m.refreshBanish()
     -- Build warlock list
     local warlocks = {}
     local playerName = UnitName("player")
-    if playerName then table.insert(warlocks, playerName) end
+    if playerName and playerIsWarlock() then table.insert(warlocks, playerName) end
     local numRaid = GetNumRaidMembers()
     if numRaid > 0 then
         for i = 1, numRaid do
@@ -2420,6 +2431,23 @@ eFrame:SetScript("OnEvent", function()
         if SoulstoneTrackerDB.cfg then
             m.cfg = SoulstoneTrackerDB.cfg
         end
+
+        -- Off on non-warlock characters unless turned on for that character
+        -- with /ss enable. Nothing is built and every event is dropped, so a
+        -- disabled character costs nothing (and sends nothing to the group).
+        SoulstoneTrackerDB.enabledChars = SoulstoneTrackerDB.enabledChars or {}
+        if not playerIsWarlock() and not SoulstoneTrackerDB.enabledChars[charKey()] then
+            m.disabled = true
+            this:UnregisterAllEvents()
+            -- tell each character once, so it isn't a mystery later
+            SoulstoneTrackerDB.toldDisabled = SoulstoneTrackerDB.toldDisabled or {}
+            if not SoulstoneTrackerDB.toldDisabled[charKey()] then
+                SoulstoneTrackerDB.toldDisabled[charKey()] = true
+                say("Off on this character (not a warlock). Type |cffffd700/ss enable|r to turn it on here.")
+            end
+            return
+        end
+
         loadAll()
         m.createFrame()
         m.createMinimapButton()
@@ -2429,7 +2457,7 @@ eFrame:SetScript("OnEvent", function()
         -- session. If you're actually still on cooldown from before this
         -- reload, it'll incorrectly show ready until corrected by your next
         -- real cast -- an accepted limitation given no API can tell us.
-        m.ssCooldowns[UnitName("player")] = 0
+        if playerIsWarlock() then m.ssCooldowns[UnitName("player")] = 0 end
         if SoulstoneTrackerDB.hidden then m.frame:Hide() else m.frame:Show() end
         if SoulstoneTrackerDB.locked then m.locked = true m.frame.updateLock() end
         m.updateGroupVisibility()
@@ -2753,6 +2781,30 @@ SlashCmdList["SOULSTONETRACKER"] = function(args)
     args = args or ""
     local cmd = string.lower(string.gsub(args, "^%s*(.-)%s*$", "%1"))
 
+    -- per-character on/off for non-warlocks (warlocks always have it on)
+    if cmd == "enable" or cmd == "disable" then
+        if playerIsWarlock() then
+            say("Always on for warlocks.")
+            return
+        end
+        local on = (cmd == "enable")
+        local was = SoulstoneTrackerDB.enabledChars[charKey()] and true or false
+        SoulstoneTrackerDB.enabledChars[charKey()] = on or nil
+        if on == was then
+            say(on and "Already on for this character." or "Already off for this character.")
+        elseif on == not m.disabled then
+            say(on and "Turned on for this character." or "Turned off for this character.")
+        else
+            say((on and "Turned on" or "Turned off").." for this character. Reload the UI to apply.")
+            StaticPopup_Show("SOULSTONETRACKER_RELOAD")
+        end
+        return
+    end
+    if m.disabled then
+        say("Off on this character (not a warlock). Type |cffffd700/ss enable|r to turn it on here.")
+        return
+    end
+
     if cmd == "clear" then
         m.stones = {} m.refresh() say("Cleared all soulstones.")
 
@@ -3004,6 +3056,9 @@ SlashCmdList["SOULSTONETRACKER"] = function(args)
         say("|cffffd700/ss clearcurses|r — clear curse assignments")
         say("|cffffd700/ss lock|r — toggle frame lock")
         say("|cffffd700/ss scale 0.8|r — resize (0.5-2.0)")
+        if not playerIsWarlock() then
+            say("|cffffd700/ss disable|r — turn the addon off on this (non-warlock) character")
+        end
         say("|cffffd700/ss theme classic|r or |cffffd700shadow|r — Blizzard look or the original purple look (needs /reload)")
         say("|cffffd700/ss scan|r — scan group for existing stones")
         say("|cffffd700/ss scancurse|r — scan your target for curses (unknown caster)")
